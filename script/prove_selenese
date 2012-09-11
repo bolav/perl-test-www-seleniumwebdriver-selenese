@@ -1,0 +1,15 @@
+#!/usr/bin/perl
+
+use strict;
+use Test::More;
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use Test::WWW::SeleniumWebDriver::Selenese;
+
+my $twss = Test::WWW::SeleniumWebDriver::Selenese->new(
+    'remote_server_addr' => 'localhost',
+    'port' => '8044',
+);
+
+$twss->run($ARGV[0]);
+done_testing();
