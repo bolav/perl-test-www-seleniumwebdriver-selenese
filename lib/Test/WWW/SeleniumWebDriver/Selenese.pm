@@ -1,9 +1,11 @@
 package Test::WWW::SeleniumWebDriver::Selenese;
 
+use HTML::TreeBuilder;
 use Test::More;
 use Moose;
 use Selenium::Remote::Driver;
 use Parse::Selenese;
+use Data::Dump qw/dump dd/;
 
 has 'testbuilder' => (is => 'ro', default => sub { Test::More->builder; });
 has 'remote_server_addr' => (is => 'ro', isa => 'Str');
@@ -59,6 +61,7 @@ sub comment {
 sub open {
     my ($self, $tc, $values, $instr) = @_;
     my $url = $self->base_url || $ENV{BASEURL} || $tc->base_url || '';
+    $self->changed(1);
     return '$srd->get(\''.$url.$values->[1].'\', '.$instr.')'."\n";
 }
 
@@ -67,6 +70,32 @@ sub assertHtmlSource {
     $self->wantsource(1);
     my ($cmp, $val) = $self->locator_to_perl($values->[1]);
     return $cmp.'($source, '.$val.', '. $instr .')'
+}
+
+*assertElementPresent = \&verifyElementPresent;
+
+sub verifyElementPresent {
+    my ($self, $tc, $values, $instr) = @_;
+    my ($loc, $type) = $self->locator_to_swd($values->[1]);
+    return '$elem = $srd->find_element('._esc_in_q($loc).', \''.$type.'\');'."\n".'ok($elem, '.$instr.');'."\n";
+}
+
+sub assertText {
+    $self->wanttext(1);
+    $self->wantsource(1);
+    my ($cmp, $val) = $self->locator_to_perl($values->[1]);
+    return ''
+}
+
+sub locator_to_swd {
+    my ($self, $locator) = @_;
+    if ($locator =~ /^id=(.*)/) {
+        return ($1, 'id');
+    }
+    elsif ($locator =~ /^link=(.*)/) {
+        return ($1, 'link');
+    }
+    return ($locator, 'xpath');
 }
 
 sub locator_to_perl {
@@ -109,7 +138,8 @@ sub run {
     my $tb = $self->testbuilder;
     my $srd = $self->_srd;
     $test = $self->get_test($test);
-    my $source;
+    my $source; # Source of current page
+    my $elem;   # Element to be used in loop
     if (ref $test eq 'Parse::Selenese::TestCase') {
         foreach my $command (@{$test->commands}) {
             my ($cmd, $args) = $self->convert_command($command, $test);
@@ -117,7 +147,7 @@ sub run {
             if ($self->wantsource && !$source) {
                 $source = $srd->get_page_source();
             }
-            # print "cmd: $cmd\n";
+            print "cmd: $cmd\n";
             eval $cmd;
             if ($@) {
                 die $@.' '.join(' ', @{$command->values})."\n".$cmd;
@@ -148,6 +178,13 @@ sub _esc_in_regex {
     # print STDERR "str: $str\n";
     # $str =~ s/\s/\\s/g;
     return $str;
+}
+
+sub _esc_in_q {
+    my ($str) = @_;
+    $str =~ s/\\/\\\\/g;
+    $str =~ s/\'/\\\'/g;
+    return "'".$str."'";
 }
 
 
